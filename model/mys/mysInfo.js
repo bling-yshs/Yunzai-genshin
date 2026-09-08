@@ -5,6 +5,24 @@ import NoteUser from "./NoteUser.js"
 import MysUser from "./MysUser.js"
 import DailyCache from "./DailyCache.js"
 
+/**
+ * 米游社API校验失败异常，由调用方决定如何提示用户
+ * replyMsg 保留原 e.reply 的完整消息数组（含按钮），调用方可直接 reply
+ * replyOption 保留原 e.reply 的选项（如 at），可为空
+ */
+export class MysCodeError extends Error {
+  constructor(retcode, replyMsg, res, replyOption) {
+    super(`mys retcode ${retcode}`)
+    this.name = "MysCodeError"
+    /** 鸭子类型标记，供 miao 等外部插件判断，避免跨插件 import */
+    this.isMysCodeError = true
+    this.retcode = retcode
+    this.replyMsg = replyMsg
+    this.res = res
+    this.replyOption = replyOption
+  }
+}
+
 export default class MysInfo {
   static tips = "请先#绑定Cookie\n发送【Cookie帮助】查看配置教程"
 
@@ -46,7 +64,6 @@ export default class MysInfo {
       "characterDetail",
     ]
 
-    this.gtest = false
     this.mysButton = segment.button([{ text: "米游社", link: "https://miyoushe.com" }])
   }
 
@@ -222,8 +239,16 @@ export default class MysInfo {
       }
 
       for (let i in res) {
-        res[i] = await mysInfo.checkCode(res[i], res[i].api, mysApi, api[res[i].api])
-        mysInfo.gtest = true
+        try {
+          res[i] = await mysInfo.checkCode(res[i], res[i]?.api, mysApi, api[res[i]?.api])
+        } catch (err) {
+          if (err?.isMysCodeError) {
+            await e.reply(err.replyMsg, false, err.replyOption)
+            res[i] = err.res
+            break
+          }
+          throw err
+        }
 
         if (res[i]?.retcode === 0) continue
 
@@ -231,7 +256,16 @@ export default class MysInfo {
       }
     } else {
       res = await mysApi.getData(api, data)
-      res = await mysInfo.checkCode(res, api, mysApi, data)
+      try {
+        res = await mysInfo.checkCode(res, api, mysApi, data)
+      } catch (err) {
+        if (err?.isMysCodeError) {
+          await e.reply(err.replyMsg, false, err.replyOption)
+          res = err.res
+        } else {
+          throw err
+        }
+      }
     }
 
     return res
@@ -384,11 +418,21 @@ export default class MysInfo {
     return this.ckUser?.ck
   }
 
-  async checkCode(res, type, mysApi = {}, data = {}, isTask = false) {
+  /**
+   * 校验米游社API返回码，失败时抛出 MysCodeError，由调用方决定如何提示用户
+   * @param res 响应对象
+   * @param type 请求的API
+   * @param mysApi MysApi实例
+   * @param data 请求data
+   * @returns {Promise<*>} 校验通过的 res（retcode 为 0）
+   * @throws {MysCodeError} 校验失败
+   */
+  async checkCode(res, type, mysApi = {}, data = {}) {
     if (!res) {
-      if (!isTask)
-        this.e.reply([`UID:${this.uid}，米游社接口请求失败，暂时无法查询`, this.mysButton])
-      return false
+      throw new MysCodeError(null, [
+        `UID:${this.uid}，米游社接口请求失败，暂时无法查询`,
+        this.mysButton,
+      ])
     }
 
     res.retcode = Number(res.retcode)
@@ -409,54 +453,72 @@ export default class MysInfo {
         if (/(登录|login)/i.test(res.message)) {
           if (this.ckInfo.uid) {
             logger.mark(`[ck失效][uid:${this.uid}][qq:${this.userId}]`)
-            if (!isTask)
-              this.e.reply([`UID:${this.ckInfo.uid}，米游社Cookie已失效`, this.mysButton])
+            await this.delCk()
+            throw new MysCodeError(
+              res.retcode,
+              [`UID:${this.ckInfo.uid}，米游社Cookie已失效，可尝试 #刷新ck`, this.mysButton],
+              res,
+            )
           } else {
             logger.mark(`[公共ck失效][ltuid:${this.ckInfo.ltuid}]`)
-            if (!isTask)
-              this.e.reply([`UID:${this.uid}，米游社查询失败，请稍后再试`, this.mysButton])
+            throw new MysCodeError(
+              res.retcode,
+              [`UID:${this.uid}，米游社查询失败，请稍后再试`, this.mysButton],
+              res,
+            )
           }
-          if (!isTask) await this.delCk()
-        } else {
-          if (!isTask)
-            this.e.reply([
-              `UID:${this.uid}，米游社接口报错，暂时无法查询：${res.message}`,
-              this.mysButton,
-            ])
         }
-        break
+        throw new MysCodeError(res.retcode, [
+          `UID:${this.uid}，米游社接口报错，暂时无法查询：${res.message}`,
+          this.mysButton,
+        ], res)
       case 1008:
-        if (!isTask)
-          this.e.reply([`UID:${this.uid}，请先去米游社绑定角色`, this.mysButton], false, {
-            at: this.userId,
-          })
-        break
+        throw new MysCodeError(
+          res.retcode,
+          [`UID:${this.uid}，请先去米游社绑定角色`, this.mysButton],
+          res,
+          { at: this.userId },
+        )
       case 10101:
-        if (!isTask) {
-          await this.disableToday()
-          this.e.reply([`UID:${this.uid}，查询已达今日上限`, this.mysButton])
-        }
-        break
+        await this.disableToday()
+        throw new MysCodeError(
+          res.retcode,
+          [`UID:${this.uid}，查询已达今日上限`, this.mysButton],
+          res,
+        )
       case 10102:
         if (res.message === "Data is not public for the user") {
-          if (!isTask)
-            this.e.reply([`UID:${this.uid}，米游社数据未公开`, this.mysButton], false, {
-              at: this.userId,
-            })
-        } else {
-          if (!isTask) this.e.reply([`UID:${this.uid}，请先去米游社绑定角色`, this.mysButton])
+          throw new MysCodeError(
+            res.retcode,
+            [`UID:${this.uid}，米游社数据未公开`, this.mysButton],
+            res,
+            { at: this.userId },
+          )
         }
-        break
+        throw new MysCodeError(
+          res.retcode,
+          [`UID:${this.uid}，请先去米游社绑定角色`, this.mysButton],
+          res,
+        )
       // 伙伴不存在~
       case -1002:
-        if (res.api === "detail") res.retcode = 0
-        break
+        if (res.api === "detail") {
+          res.retcode = 0
+          break
+        }
+        throw new MysCodeError(res.retcode, [
+          `UID:${this.uid}，米游社接口报错，暂时无法查询：${res.message || "error"}`,
+          this.mysButton,
+        ], res)
       case 5003:
       case 10041:
-        if (!isTask) this.e.reply([`UID:${this.uid}，米游社账号异常，暂时无法查询`, this.mysButton])
-        break
+        throw new MysCodeError(
+          res.retcode,
+          [`UID:${this.uid}，米游社账号异常，暂时无法查询`, this.mysButton],
+          res,
+        )
       case 1034:
-      case 10035:
+      case 10035: {
         let handler = this.e.runtime?.handler || {}
 
         // 如果有注册的mys.req.err，调用
@@ -476,20 +538,25 @@ export default class MysInfo {
 
         if (!res || res?.retcode == 1034) {
           logger.mark(`[米游社查询失败][uid:${this.uid}][qq:${this.userId}] 遇到验证码`)
-          if (!isTask)
-            this.e.reply([`UID:${this.uid}，米游社查询遇到验证码，请稍后再试`, this.mysButton])
+          throw new MysCodeError(
+            res?.retcode ?? 1034,
+            [`UID:${this.uid}，米游社查询遇到验证码，请稍后再试`, this.mysButton],
+            res,
+          )
         }
         break
+      }
       case 10307:
-        if (!isTask) this.e.reply([`UID:${this.uid}，版本更新期间，数据维护中`, this.mysButton])
-        break
+        throw new MysCodeError(
+          res.retcode,
+          [`UID:${this.uid}，版本更新期间，数据维护中`, this.mysButton],
+          res,
+        )
       default:
-        if (!isTask)
-          this.e.reply([
-            `UID:${this.uid}，米游社接口报错，暂时无法查询：${res.message || "error"}`,
-            this.mysButton,
-          ])
-        break
+        throw new MysCodeError(res.retcode, [
+          `UID:${this.uid}，米游社接口报错，暂时无法查询：${res.message || "error"}`,
+          this.mysButton,
+        ], res)
     }
     if (res.retcode !== 0) {
       logger.mark(`[mys接口报错]${JSON.stringify(res)}，uid：${this.uid}`)
@@ -498,7 +565,7 @@ export default class MysInfo {
     if (type === "character" && res.data?.list) res.data.avatars = res.data?.list
 
     // 添加请求记录
-    if (!isTask) await this.ckUser.addQueryUid(this.uid)
+    if (this.ckUser) await this.ckUser.addQueryUid(this.uid)
     return res
   }
 
@@ -514,6 +581,7 @@ export default class MysInfo {
 
   /** 查询次数满，今日内标记失效 */
   async disableToday(game = "gs") {
+    if (!this.ckUser) return false
     /** 统计次数设为超限 */
     await this.ckUser.disable(game)
   }

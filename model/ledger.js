@@ -244,13 +244,21 @@ export default class Ledger extends base {
     if (isTask) {
       let mysApi = new MysApi(ck.uid, ck.ck, { log: false }, this.e?.isSr)
       ledgerInfo = await mysApi.getData("ys_ledger", { month })
-      ledgerInfo = await new MysInfo(this.e).checkCode(
-        ledgerInfo,
-        "ys_ledger",
-        mysApi,
-        { month },
-        isTask,
-      )
+      try {
+        ledgerInfo = await new MysInfo(this.e).checkCode(
+          ledgerInfo,
+          "ys_ledger",
+          mysApi,
+          { month },
+        )
+      } catch (err) {
+        // isTask 语义为不回复，取异常携带的原始响应继续走后续判断
+        if (err?.isMysCodeError) {
+          ledgerInfo = err.res
+        } else {
+          throw err
+        }
+      }
     } else {
       ledgerInfo = await MysInfo.get(this.e, "ys_ledger", { month })
     }
