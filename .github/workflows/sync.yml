@@ -1,0 +1,75 @@
+name: 自动同步上游仓库
+
+on:
+  # 每天北京时间 22:16 自动运行
+  schedule:
+    - cron: '16 22 * * *'
+      timezone: 'Asia/Shanghai'
+
+  # 允许在 Actions 页面手动运行
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 第一步：检出 Fork 仓库代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 第二步：配置 Git 用户信息
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: 第三步：合并上游到 main
+        run: |
+          set -e
+
+          if git remote get-url upstream >/dev/null 2>&1; then
+            git remote set-url upstream https://github.com/TimeRainStarSky/Yunzai-genshin.git
+          else
+            git remote add upstream https://github.com/TimeRainStarSky/Yunzai-genshin.git
+          fi
+
+          git fetch --prune --tags upstream
+
+          if git show-ref --verify --quiet refs/heads/main; then
+            git checkout main
+          else
+            git checkout -b main origin/main
+          fi
+
+          git pull --ff-only origin main
+          git merge --no-edit upstream/main
+
+          echo "合并成功，正在推送到你的仓库..."
+          git push origin main
+
+      - name: 第四步：若失败则发送邮件通知
+        if: failure()
+        uses: dawidd6/action-send-mail@v4
+        with:
+          server_address: smtp.qq.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: '【失败提醒】Yunzai-genshin Fork 仓库自动同步失败'
+          to: 377178599@qq.com
+          from: GitHub Actions 通知 <${{ secrets.MAIL_USERNAME }}>
+          body: |
+            你好，
+
+            你的仓库（${{ github.repository }}）在自动同步上游仓库时失败了。
+
+            失败原因很可能是合并上游时遇到了代码冲突，需要你手动解决。
+
+            查看失败日志：
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
