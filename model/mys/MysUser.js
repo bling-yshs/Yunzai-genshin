@@ -1,3 +1,4 @@
+import { getGameRoles } from "../../../mhy-plugin/api.js"
 /**
  * MysUser 米游社用户类
  * 主键ltuid
@@ -365,18 +366,13 @@ export default class MysUser extends BaseModel {
     }
   }
 
+  /**
+   * 使用统一服务读取角色列表。
+   * @param {string} serv 服务区域
+   * @returns {Promise<object|boolean>} 原始角色响应
+   */
   async getGameRole(serv = "mys") {
-    let ck = this.ck
-    let url = {
-      mys: "https://api-takumi.mihoyo.com/binding/api/getUserGameRolesByCookie",
-      hoyolab: "https://sg-public-api.hoyolab.com/binding/api/getUserGameRolesByCookie",
-    }
-
-    let res = await fetch(url[serv], { method: "get", headers: { Cookie: ck } })
-    if (!res.ok) return false
-    res = await res.json()
-
-    return res
+    return getGameRoles(this.ck, serv)
   }
 
   // 获取米游社通行证id

@@ -1,3 +1,4 @@
+import { handlesOperation, legacyGetData } from "../../../mhy-plugin/api.js"
 import md5 from "md5"
 import fetch from "node-fetch"
 import cfg from "../../../../lib/config/config.js"
@@ -97,7 +98,15 @@ export default class MysApi {
     return game_region[this.game][0] // 官服
   }
 
+  /**
+   * 通过统一服务查询首批接口，保留其他接口路径。
+   * @param {string} type 接口名
+   * @param {object} data 请求参数
+   * @param {boolean} cached 是否缓存
+   * @returns {Promise<object|boolean>} 原始响应
+   */
   async getData(type, data = {}, cached = false) {
+    if (handlesOperation(type)) return legacyGetData(this, type, data, cached)
     if (!this._device_fp && !data?.Getfp && !data?.headers?.["x-rpc-device_fp"]) {
       this._device_fp = await this.getData("getFp", {
         seed_id: this.generateSeed(16),

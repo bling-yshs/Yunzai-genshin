@@ -1,3 +1,4 @@
+import { unlinkAccount } from "../../../mhy-plugin/api.js"
 /**
  * Bot实际User用户类
  * 主键QQ
@@ -327,16 +328,14 @@ export default class NoteUser extends BaseModel {
     return await this.delMysUser(ltuid)
   }
 
+  /**
+   * 解除当前用户关联并保留其他用户共享的账号。
+   * @param {object|string} mysUser 账号对象或 ID
+   * @returns {Promise<void>} 解绑完成
+   */
   async delMysUser(mysUser = "") {
-    let ltuid = mysUser.ltuid || mysUser
-    if (ltuid && this.mysUsers[ltuid]) {
-      let mys = this.mysUsers[ltuid]
-      this.mysUsers[ltuid] = false
-      this._map = false
-      await mys.del()
-    }
-    this._map = false
-    await this.save()
+    const ltuid = String(mysUser.ltuid || mysUser)
+    if (ltuid && this.mysUsers[ltuid]) await unlinkAccount(String(this.qq), ltuid)
   }
 
   async eachMysUser(fn) {
