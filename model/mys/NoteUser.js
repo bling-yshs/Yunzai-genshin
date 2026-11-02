@@ -209,12 +209,15 @@ export default class NoteUser extends BaseModel {
     return this.getUidMapList(game, "ck").list
   }
 
-  /** 获取当前UID */
+  /**
+   * 获取当前游戏的有效UID，并修正已失效的当前选择。
+   * @param {string|object} game 游戏标识或消息事件
+   * @returns {string} 当前UID，无绑定时返回空字符串
+   */
   getUid(game = "gs") {
     game = this.gameKey(game)
-    // todo 刷新uid
     let ds = this.getGameDs(game)
-    if (!ds.uid) {
+    if (!ds.uid || !this.hasUid(ds.uid, game)) {
       this.setMainUid("", game)
     }
     return ds.uid || ""
@@ -251,7 +254,12 @@ export default class NoteUser extends BaseModel {
     }
   }
 
-  // 删除UID
+  /**
+   * 删除指定游戏的注册UID，并重新选择当前UID。
+   * @param {string|number} uid 待删除的UID
+   * @param {string|object} game 游戏标识或消息事件
+   * @returns {void}
+   */
   delRegUid(uid, game = "gs") {
     game = this.gameKey(game)
     let gameDs = this.getGameDs(game)
@@ -259,7 +267,7 @@ export default class NoteUser extends BaseModel {
     delete dsData[uid]
     gameDs.data = dsData
     this._map = false
-    if (gameDs.uid === uid) {
+    if (String(gameDs.uid) === String(uid)) {
       this.setMainUid("", game, false)
     }
     this.save()
@@ -289,7 +297,13 @@ export default class NoteUser extends BaseModel {
     return uid
   }
 
-  // 切换绑定CK生效的UID
+  /**
+   * 切换当前游戏的UID，自动选择时在列表为空的情况下清空当前UID。
+   * @param {string|number} uid UID或列表下标，空值表示自动选择
+   * @param {string|object} game 游戏标识或消息事件
+   * @param {boolean} save 是否保存用户数据
+   * @returns {false|undefined} 没有可选UID时返回false
+   */
   setMainUid(uid = "", game = "gs", save = true) {
     this._map = false
     game = this.gameKey(game)
@@ -298,6 +312,10 @@ export default class NoteUser extends BaseModel {
       uid = (uids?.[uid] || uids?.[0])?.uid || ""
     }
     if (!uid) {
+      this.getGameDs(game).uid = ""
+      if (save) {
+        this.save()
+      }
       return false
     }
     if (this.hasUid(uid, game)) {
