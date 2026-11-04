@@ -371,6 +371,10 @@ export default class MysInfo {
     return false
   }
 
+  /**
+   * 提示查询所需的UID或Cookie缺失，并标记本次消息已提示。
+   * @returns {Promise<void>} 提示处理完成
+   */
   async checkReply() {
     if (this.e.noTips === true) return
 
@@ -384,7 +388,7 @@ export default class MysInfo {
 
     if (!this.ckInfo.ck) {
       this.e.reply([
-        "暂无可用CK，请绑定更多用户或设置公共ck..",
+        "暂无可用CK，请先 #扫码登录",
         segment.button([{ text: "Cookie帮助", callback: "#Cookie帮助" }]),
       ])
     }
