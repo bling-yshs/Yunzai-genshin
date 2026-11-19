@@ -105,10 +105,10 @@ export default class MysInfo {
   }
 
   /**
-   * 获取UID
-   * @param e
-   * @param matchMsgUid 用于判断消息是否为uid数据
-   * @returns {Promise<string|boolean|*|string>}
+   * 获取查询UID，并在缺少UID时记录当前消息的绑定提示状态。
+   * @param {object} e 消息事件
+   * @param {boolean} matchMsgUid 是否从消息中匹配UID
+   * @returns {Promise<string|number|false>} 查询UID，缺少UID时返回false
    */
   static async getUid(e, matchMsgUid = true) {
     let user = await NoteUser.create(e)
@@ -127,7 +127,8 @@ export default class MysInfo {
       let atUser = await NoteUser.create(at)
       uid = atUser.getUid(game)
       if (uid) return String(uid)
-      if (e.noTips !== true) {
+      if (e.noTips !== true && !e._replyNeedUid) {
+        e._replyNeedUid = true
         e.reply(["尚未绑定uid", segment.button([{ text: "绑定UID", input: "#绑定uid" }])], false, {
           at,
         })
@@ -151,7 +152,8 @@ export default class MysInfo {
       return user.autoRegUid(uid, game)
     }
 
-    if (e.noTips !== true) {
+    if (e.noTips !== true && !e._replyNeedUid) {
+      e._replyNeedUid = true
       e.reply(["请先#绑定uid", segment.button([{ text: "绑定UID", input: "#绑定uid" }])], false, {
         at: at || true,
       })
@@ -423,13 +425,13 @@ export default class MysInfo {
   }
 
   /**
-   * 校验米游社API返回码，失败时抛出 MysCodeError，由调用方决定如何提示用户
+   * 校验米游社 API 返回码，并将验证码交给已注册的处理器处理。
    * @param res 响应对象
    * @param type 请求的API
    * @param mysApi MysApi实例
    * @param data 请求data
-   * @returns {Promise<*>} 校验通过的 res（retcode 为 0）
-   * @throws {MysCodeError} 校验失败
+   * @returns {Promise<object>} 接口响应，验证码仍未通过时保留错误码
+   * @throws {MysCodeError} 查询失败且需要调用方提示用户
    */
   async checkCode(res, type, mysApi = {}, data = {}) {
     if (!res) {
@@ -540,13 +542,9 @@ export default class MysInfo {
             })) || res
         }
 
-        if (!res || res?.retcode == 1034) {
+        if (res.retcode == 1034) {
           logger.mark(`[米游社查询失败][uid:${this.uid}][qq:${this.userId}] 遇到验证码`)
-          throw new MysCodeError(
-            res?.retcode ?? 1034,
-            [`UID:${this.uid}，米游社查询遇到验证码，请稍后再试`, this.mysButton],
-            res,
-          )
+          return res
         }
         break
       }
