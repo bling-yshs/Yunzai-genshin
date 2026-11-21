@@ -34,7 +34,7 @@ export class user extends plugin {
           fnc: "myCk",
         },
         {
-          reg: /^#?(原神|星铁|绝区零)?删除c(oo)?k(ie)?$/i,
+          reg: /^#?(原神|星铁|绝区零)?删除c(oo)?k(ie)?(?:[\s+]*[0-9]{1,2})?$/i,
           fnc: "delCk",
         },
         {
@@ -175,9 +175,13 @@ export class user extends plugin {
     await this.User.bing()
   }
 
-  /** 删除ck */
+  /**
+   * 处理删除 CK 指令，并回复解绑结果。
+   * @returns {Promise<void>} 回复发送完成。
+   */
   async delCk() {
-    let msg = await this.User.delCk()
+    const index = this.e.msg.match(/[0-9]{1,2}$/)?.[0]
+    const msg = await this.User.delCk(index)
     await this.reply(msg)
   }
 

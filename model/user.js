@@ -196,26 +196,23 @@ export default class User extends base {
     await this.e.reply(msg)
   }
 
-  /** 删除绑定ck */
-  async delCk() {
-    let game
-    if (this.e.game) {
-      game = this.e.game
-    } else {
-      game = "gs"
-    }
-    // 判断是原神还是星铁
-    let user = await this.user()
-    // 获取当前uid
-    let uidData = user.getUidData("", (game = game), this.e)
-    if (!uidData || uidData.type !== "ck" || !uidData.ltuid) {
-      return `删除失败：当前的UID${uidData?.uid}无CK信息`
-    }
-    let mys = await MysUser.create(uidData.ltuid)
-    if (!mys) {
-      return `删除失败：当前的UID${uidData?.uid}无CK信息`
-    }
-    let msg = ["绑定Cookie已删除", mys.getUidInfo()]
+  /**
+   * 解除指定 UID 对应的米游社账号绑定。
+   * @param {string} [index] UID 列表中从 1 开始的序号，省略时使用当前选中的 UID。
+   * @returns {Promise<string>} 解绑结果。
+   */
+  async delCk(index) {
+    const user = await this.user()
+    const game = user.gameKey(this.e)
+    const uidData = index === undefined
+      ? user.getUidData("", game)
+      : user.getUidList(game)[Number(index) - 1]
+    if (index !== undefined && !uidData) return "删除失败：UID序号输入错误"
+
+    const mys = uidData?.type === "ck" && uidData.ltuid && (await MysUser.create(uidData.ltuid))
+    if (!mys) return `删除失败：UID${uidData?.uid ?? ""}无CK信息`
+
+    const msg = ["绑定Cookie已删除", mys.getUidInfo()]
     await user.delMysUser(uidData.ltuid)
     return msg.join("\n")
   }
@@ -232,22 +229,28 @@ export default class User extends base {
     return await this.showUid()
   }
 
+  /**
+   * 删除手动绑定的 UID，或提示按序号解绑 CK。
+   * @param {string|number} index UID 列表中从 1 开始的序号。
+   * @returns {Promise<unknown>} UID 列表或提示的发送结果。
+   */
   async delUid(index) {
-    let user = await this.user()
-    let game = this.e
-    let uidList = user.getUidList(game)
-    if (index > uidList.length) {
+    const user = await this.user()
+    const game = user.gameKey(this.e)
+    const uidIndex = Number(index)
+    const uidObj = user.getUidList(game)[uidIndex - 1]
+    if (!uidObj) {
       return await this.e.reply([
         "uid序号输入错误",
         segment.button([{ text: "删除uid", input: "#删除uid" }]),
       ])
     }
-    index = Number(index) - 1
-    let uidObj = uidList[index]
     if (uidObj.type === "ck") {
+      const prefix = { sr: "#星铁", zzz: "#绝区零" }[game] || "#"
+      const command = `${prefix}删除ck${uidIndex}`
       return await this.e.reply([
-        "CK对应UID无法直接删除，请通过【#删除ck】命令来删除",
-        segment.button([{ text: "删除ck", callback: "#删除ck" }]),
+        `第 ${uidIndex} 项 UID ${uidObj.uid} 来自 CK 绑定，请发送【${command}】解除对应的米游社账号绑定。`,
+        segment.button([{ text: "删除CK", input: command }]),
       ])
     }
     await user.delRegUid(uidObj.uid, game)
