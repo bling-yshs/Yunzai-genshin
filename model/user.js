@@ -11,6 +11,7 @@ import YAML from "yaml"
 import { Data } from "#miao"
 import { Player } from "#miao.models"
 import { UserGameDB, sequelize } from "./db/index.js"
+import { getAccounts } from "../../mhy-plugin/api.js"
 
 export default class User extends base {
   constructor(e) {
@@ -282,9 +283,14 @@ export default class User extends base {
     await this.e.reply(msg.join("\n"))
   }
 
-  /** #uid */
+  /**
+   * 渲染 UID 列表及各角色所属账号的设备绑定状态。
+   * @returns {Promise<unknown>} UID 信息图和操作按钮的回复结果
+   */
   async showUid() {
     let user = await this.user()
+    const accounts = await getAccounts(String(user.qq))
+    const boundAccounts = new Set(accounts.filter(account => account.bound_device).map(account => String(account.ltuid)))
     let uids = [
       {
         key: "gs",
@@ -303,6 +309,7 @@ export default class User extends base {
       ds.uidList = user.getUidList(ds.key)
       ds.uid = user.getUid(ds.key)
       lodash.forEach(ds.uidList, uidDs => {
+        uidDs.hasBoundDevice = uidDs.type === "ck" && boundAccounts.has(String(uidDs.ltuid))
         if (ds.key !== "zzz") {
           let player = Player.create(uidDs.uid, ds.key)
           if (player) {

@@ -163,7 +163,8 @@ nobr {
           vertical-align: middle;
           transform: scale(.9);
 
-          &.ck {
+          &.ck,
+          &.bound-device {
             background: #d3bc8e;
             color: #3a2702;
             font-weight: bold;
@@ -172,6 +173,12 @@ nobr {
 
           &.reg {
             background: #666;
+          }
+
+          &.bound-device {
+            width: auto;
+            padding: 0 6px;
+            white-space: nowrap;
           }
         }
       }

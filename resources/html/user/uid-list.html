@@ -34,6 +34,9 @@ zzz:{mark:'%'}
               <div class="uid-info">
                 <div class="uid shadow">{{uid.uid}}<span>{{uid.uid}}</span></div>
                 <div class="type {{uid.type}}">{{uid.type==='ck'?'CK':'绑定'}}</div>
+                {{if uid.hasBoundDevice}}
+                <div class="type bound-device">已绑定设备</div>
+                {{/if}}
               </div>
               <div class="detail">
                 {{if uid.name && uid.level}}

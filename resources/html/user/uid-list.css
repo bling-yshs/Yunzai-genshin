@@ -137,7 +137,8 @@ nobr {
   vertical-align: middle;
   transform: scale(0.9);
 }
-.uid-list .game-inner .info .uid-info .type.ck {
+.uid-list .game-inner .info .uid-info .type.ck,
+.uid-list .game-inner .info .uid-info .type.bound-device {
   background: #d3bc8e;
   color: #3a2702;
   font-weight: bold;
@@ -145,6 +146,11 @@ nobr {
 }
 .uid-list .game-inner .info .uid-info .type.reg {
   background: #666;
+}
+.uid-list .game-inner .info .uid-info .type.bound-device {
+  width: auto;
+  padding: 0 6px;
+  white-space: nowrap;
 }
 .uid-list .game-inner .info .detail {
   font-size: 14px;
